@@ -35,12 +35,6 @@ def main():
     print("Calculating absolute relative pose between each estimated pose from its associated GT...")
     for index, row in tqdm(tj_Df.iterrows(), total=tj_Df.shape[0]):
         timestamp = row['Timestamp']
-        t_x_est = row['t_x']
-        t_y_est = row['t_y']
-        t_z_est = row['t_z']
-        t_x_ref = 0.0
-        t_y_ref = 0.0
-        t_z_ref = 0.0
 
         Pe_wc = quaternion_matrix(np.array([row['rot_x'], row['rot_y'], row['rot_z'], row['rot_w']]))
         Pe_wc[0,3] = row['t_x']
@@ -48,6 +42,11 @@ def main():
         Pe_wc[2,3] = row['t_z']
 
         gt_i = (gt_Df['Timestamp'] - timestamp).abs().argsort()[:1].values[0]
+        '''
+        Check difference between timstamp of est_pose and ref_pose
+        If the timestamps are too far apart, i.e. greater than max_diff
+        The two poses are considered non-associative and the est_pose is discarded for error calculation
+        '''
         if (abs(gt_Df.loc[gt_i, 'Timestamp'] - timestamp)) < max_diff:
             t_x_ref = gt_Df.loc[gt_i, 't_x']
             t_y_ref = gt_Df.loc[gt_i, 't_y']
@@ -110,7 +109,7 @@ def main():
         f.write("\tmax\t\t: "+str(nTracked_max)+ "\n")
         f.write("\tnTracked at max_error: "+str(nTracked_Df.loc[max_error_i, 'nTracked'])+ "\n")
 
-    tj_Df.to_csv(os.path.join(args.output_dir, 'trajectory_gt_synced.txt'), sep=' ', index=False)
+    tj_Df.to_csv(os.path.join(args.output_dir, 'trajectory_gt_synced.txt'), sep='\t', index=False)
 
     time_of_interest = tj_Df.loc[max_error_i, 'Timestamp']
 
