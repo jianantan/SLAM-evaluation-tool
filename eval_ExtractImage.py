@@ -32,7 +32,7 @@ def main():
     max_error_i = 0
     
     gt_i = 0
-    print("Calculating absolute relative pose between each estimated pose from its corresponding GT...")
+    print("Calculating absolute relative pose between each estimated pose from its associated GT...")
     for index, row in tqdm(tj_Df.iterrows(), total=tj_Df.shape[0]):
         timestamp = row['Timestamp']
         t_x_est = row['t_x']
