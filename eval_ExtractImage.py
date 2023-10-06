@@ -86,9 +86,14 @@ def main():
     nTracked_mean = nTracked_Df["nTracked"].mean()
     nTracked_median = nTracked_Df["nTracked"].median()
 
-    print(str(nTracked_min) +" "+str(nTracked_max)+ " "+ str(nTracked_mean)+ " " + str(nTracked_median))
     max_error_statement = "Max error occurred at: "+str(max_error_timestamp)+" ["+str(max_error_x)+ " "+ str(max_error_y)+ " " + str(max_error_z) +"]:  "
-    
+    print("max\t: "+str(tj_Df.loc[max_error_i, 'error']))
+    print("mean\t: "+str(tj_Df['error'].mean()))
+    print("median\t: "+str(tj_Df['error'].median()))
+    print("min\t: "+str(tj_Df['error'].min()))
+    print("rmse\t: "+str(math.sqrt(tj_Df['error'].pow(2).sum()/tj_Df['error'].count())))
+    print("std\t: "+str(tj_Df['error'].std()))
+
     isExist = os.path.exists(args.output_dir)
     if not isExist:
         # Create a new directory because it does not exist
@@ -98,11 +103,19 @@ def main():
     print(max_error_statement)
     with open(os.path.join(args.output_dir, 'max_error.txt'), 'w') as f:
         f.write(max_error_statement + "\n")
-        f.write("\tmax_error\t\t: "+str(tj_Df.loc[max_error_i, 'error'])+"\n")
-        f.write("\tmedian_error\t\t: "+str(tj_Df['error'].median())+"\n")
-        f.write("\tmean_error\t\t: "+str(tj_Df['error'].mean())+"\n")
-        f.write("\tmin_error\t\t: "+str(tj_Df['error'].min())+"\n")
-        f.write("nTracked Map Points: "+ "\n")
+        f.write("max_error\n")
+        f.write("mean_error\n")
+        f.write("median_error\n")
+        f.write("min_error\n")
+        f.write("rmse\n")
+        f.write("std\n")
+        f.write(str(tj_Df.loc[max_error_i, 'error'])+"\n")
+        f.write(str(tj_Df['error'].mean())+"\n")
+        f.write(str(tj_Df['error'].median())+"\n")
+        f.write(str(tj_Df['error'].min())+"\n")
+        f.write(str(math.sqrt(tj_Df['error'].pow(2).sum()/tj_Df['error'].count()))+"\n")
+        f.write(str(tj_Df['error'].std())+"\n")
+        f.write("\nnTracked Map Points: "+ "\n")
         f.write("\tmin\t\t: "+str(nTracked_min)+ "\n")
         f.write("\tmean\t\t: "+str(nTracked_mean)+ "\n")
         f.write("\tmedian\t\t: "+str(nTracked_median)+ "\n")
