@@ -11,6 +11,8 @@ import numpy as np
 import math
 import warnings
 from tqdm import tqdm
+from tf.transformations import quaternion_matrix
+from tf import transformations
 
 def main():
     warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -22,60 +24,93 @@ def main():
 
     args = parser.parse_args()
     gt_Df = pd.read_csv(args.gt_file, delimiter=' ', names=['Timestamp', 't_x', 't_y', 't_z', 'rot_x', 'rot_y', 'rot_z', 'rot_w'], header=None)
-    tj_Df = pd.read_csv(args.tj_file, delimiter=' ', names=['Timestamp', 't_x', 't_y', 't_z', 'rot_x', 'rot_y', 'rot_z', 'rot_w', 'dist'], header=None)
+    tj_Df = pd.read_csv(args.tj_file, delimiter=' ', names=['Timestamp', 't_x', 't_y', 't_z', 'rot_x', 'rot_y', 'rot_z', 'rot_w', 'Timestamp_ref','t_x_ref', 't_y_ref', 't_z_ref', 'rot_x_ref', 'rot_y_ref', 'rot_z_ref', 'rot_w_ref', 'error'], header=None)
+    nTracked_Df = pd.read_csv(args.tj_file[:len(args.tj_file)-4] + "_nTracked.txt", delimiter=' ', names=['Timestamp', 'nTracked'], header=None)
     frame_rate = 30.0
-    #gt_file=str(sys.argv[1])
-    #tj_file=str(sys.argv[2])
+    max_diff = 0.01
     max_error = 0
     max_error_i = 0
     
     gt_i = 0
-    inSync = False
-    print("Calculating Euclidean distance of each estimated pose from its corresponding GT...")
+    print("Calculating absolute relative pose between each estimated pose from its corresponding GT...")
     for index, row in tqdm(tj_Df.iterrows(), total=tj_Df.shape[0]):
         timestamp = row['Timestamp']
         t_x_est = row['t_x']
         t_y_est = row['t_y']
+        t_z_est = row['t_z']
         t_x_ref = 0.0
         t_y_ref = 0.0
-        '''
-        last_gt_i = gt_i
-        while gt_i >= 0 and gt_i < (len(gt_Df.index) - 2):
-            if timestamp >= gt_Df.loc[gt_i, 'Timestamp'] and timestamp < gt_Df.loc[gt_i + 1, 'Timestamp']:
-                inSynce = True
-                break
-            elif timestamp >= gt_Df.loc[gt_i + 1, 'Timestamp']:
-                gt_i += 1
-            elif timestamp < gt_Df.loc[gt_i, 'Timestamp']:
-                gt_i -= 1
-        
-        if inSync is True:
-            
-            if abs(timestamp - gt_Df.loc[gt_i, 'Timestamp']) < abs(timestamp - gt_Df.loc[gt_i + 1, 'Timestamp']):
-                if abs(timestamp - gt_Df.loc[gt_i, 'Timestamp']) < 1.0/frame_rate:
-                    t_x_ref = gt_Df.loc[gt_i, 't_x']
-                    t_y_ref = gt_Df.loc[gt_i, 't_y']
-            else:
-                if abs(timestamp - gt_Df.loc[gt_i + 1, 'Timestamp']) < 1.0/frame_rate:
-                    t_x_ref = gt_Df.loc[gt_i + 1, 't_x']
-                    t_y_ref = gt_Df.loc[gt_i + 1, 't_y']
-        else:
-            gt_i = last_gt_i
-        '''
-        gt_i = (gt_Df['Timestamp'] - timestamp).abs().argsort()[:1].values[0]
-        t_x_ref = gt_Df.loc[gt_i, 't_x']
-        t_y_ref = gt_Df.loc[gt_i, 't_y']
-        row['dist'] = math.sqrt((t_x_est - t_x_ref)**2 + (t_y_est - t_y_ref)**2)
-        if row['dist'] > max_error:
-            max_error = row['dist']
-            max_error_i = index
-            max_error_x = t_x_ref
-            max_error_y = t_y_ref
+        t_z_ref = 0.0
 
-    max_error_statement = "Max error occurred at: ["+str(max_error_x)+ " "+ str(max_error_y)+ "]"
+        Pe_wc = quaternion_matrix(np.array([row['rot_x'], row['rot_y'], row['rot_z'], row['rot_w']]))
+        Pe_wc[0,3] = row['t_x']
+        Pe_wc[1,3] = row['t_y']
+        Pe_wc[2,3] = row['t_z']
+
+        gt_i = (gt_Df['Timestamp'] - timestamp).abs().argsort()[:1].values[0]
+        if (abs(gt_Df.loc[gt_i, 'Timestamp'] - timestamp)) < max_diff:
+            t_x_ref = gt_Df.loc[gt_i, 't_x']
+            t_y_ref = gt_Df.loc[gt_i, 't_y']
+            t_z_ref = gt_Df.loc[gt_i, 't_z']
+            r_x_ref = gt_Df.loc[gt_i, 'rot_x']
+            r_y_ref = gt_Df.loc[gt_i, 'rot_y']
+            r_z_ref = gt_Df.loc[gt_i, 'rot_z']
+            r_w_ref = gt_Df.loc[gt_i, 'rot_w']
+
+            Pr_wc = quaternion_matrix(np.array([r_x_ref, r_y_ref, r_z_ref, r_w_ref]))
+            Pr_wc[0,3] = t_x_ref
+            Pr_wc[1,3] = t_y_ref
+            Pr_wc[2,3] = t_z_ref
+            Pr_cw = transformations.inverse_matrix(Pr_wc)
+
+            E = np.dot(Pr_cw, Pe_wc)
+            row['error'] = math.sqrt((E[0,3])**2 + (E[1,3])**2 + (E[2,3])**2)
+            row['Timestamp_ref'] = gt_Df.loc[gt_i, 'Timestamp']
+            row['t_x_ref'] = t_x_ref
+            row['t_y_ref'] = t_y_ref
+            row['t_z_ref'] = t_z_ref
+            row['rot_x_ref'] = r_x_ref
+            row['rot_y_ref'] = r_y_ref
+            row['rot_z_ref'] = r_z_ref
+            row['rot_w_ref'] = r_w_ref
+
+            if row['error'] > max_error:
+                max_error = row['error']
+                max_error_i = index
+                max_error_x = t_x_ref
+                max_error_y = t_y_ref
+                max_error_z = t_z_ref
+                max_error_timestamp = timestamp
+
+    nTracked_min = nTracked_Df["nTracked"].min()
+    nTracked_max = nTracked_Df["nTracked"].max()
+    nTracked_mean = nTracked_Df["nTracked"].mean()
+    nTracked_median = nTracked_Df["nTracked"].median()
+
+    print(str(nTracked_min) +" "+str(nTracked_max)+ " "+ str(nTracked_mean)+ " " + str(nTracked_median))
+    max_error_statement = "Max error occurred at: "+str(max_error_timestamp)+" ["+str(max_error_x)+ " "+ str(max_error_y)+ " " + str(max_error_z) +"]:  "
+    
+    isExist = os.path.exists(args.output_dir)
+    if not isExist:
+        # Create a new directory because it does not exist
+        os.makedirs(args.output_dir)
+        print(str(args.output_dir) + " created!")
+
     print(max_error_statement)
     with open(os.path.join(args.output_dir, 'max_error.txt'), 'w') as f:
-        f.write(max_error_statement)
+        f.write(max_error_statement + "\n")
+        f.write("\tmax_error\t\t: "+str(tj_Df.loc[max_error_i, 'error'])+"\n")
+        f.write("\tmedian_error\t\t: "+str(tj_Df['error'].median())+"\n")
+        f.write("\tmean_error\t\t: "+str(tj_Df['error'].mean())+"\n")
+        f.write("\tmin_error\t\t: "+str(tj_Df['error'].min())+"\n")
+        f.write("nTracked Map Points: "+ "\n")
+        f.write("\tmin\t\t: "+str(nTracked_min)+ "\n")
+        f.write("\tmean\t\t: "+str(nTracked_mean)+ "\n")
+        f.write("\tmedian\t\t: "+str(nTracked_median)+ "\n")
+        f.write("\tmax\t\t: "+str(nTracked_max)+ "\n")
+        f.write("\tnTracked at max_error: "+str(nTracked_Df.loc[max_error_i, 'nTracked'])+ "\n")
+
+    tj_Df.to_csv(os.path.join(args.output_dir, 'trajectory_gt_synced.txt'), sep=' ', index=False)
 
     time_of_interest = tj_Df.loc[max_error_i, 'Timestamp']
 
